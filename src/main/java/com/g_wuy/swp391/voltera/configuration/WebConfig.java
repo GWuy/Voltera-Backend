@@ -16,7 +16,7 @@ public class WebConfig {
 
         // Cho phép frontend, VNPAY và ngrok gọi vào
         config.setAllowedOrigins(List.of(
-                "http://localhost:5173",
+                "*",
                 "https://sandbox.vnpayment.vn",
                 "https://*.ngrok-free.dev"
         ));

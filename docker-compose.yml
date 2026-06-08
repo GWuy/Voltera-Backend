@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: voltera-db
+    environment:
+      POSTGRES_DB: voltera
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build: .
+    container_name: voltera-app
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/voltera
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+      - JWT_SECRET=${JWT_SECRET}
+      - R2_ACCESS_KEY=${R2_ACCESS_KEY}
+      - R2_SECRET_KEY=${R2_SECRET_KEY}
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      - R2_END_POINT=${R2_END_POINT}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+      - R2_PUBLIC_BASE_URL=${R2_PUBLIC_BASE_URL}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_MAIL_USERNAME=${SMTP_MAIL_USERNAME}
+      - SMTP_MAIL_PASSWORD=${SMTP_MAIL_PASSWORD}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_SCOPE=${GOOGLE_SCOPE}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - GOOGLE_AUTH_URL=${GOOGLE_AUTH_URL}
+      - GOOGLE_TOKEN_URL=${GOOGLE_TOKEN_URL}
+      - GOOGLE_USERINFO_URL=${GOOGLE_USERINFO_URL}
+      - VNP_URL=${VNP_URL}
+      - VNP_RETURN_URL=${VNP_RETURN_URL}
+      - VNP_TMN_CODE=${VNP_TMN_CODE}
+      - VNP_HASH_SECRET_KEY=${VNP_HASH_SECRET_KEY}
+      - VNP_API_URL=${VNP_API_URL}
+
+volumes:
+  postgres_data:
