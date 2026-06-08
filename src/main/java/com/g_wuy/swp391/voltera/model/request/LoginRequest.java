@@ -11,6 +11,5 @@ public class LoginRequest {
     @Email(message = "Email format is invalid")
     private String username;
     @NotBlank(message = "Password is required")
-    @Size(min = 6, message = "Password must have at least 6 characters")
     private String password;
 }
