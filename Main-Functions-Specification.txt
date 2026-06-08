@@ -1,0 +1,793 @@
+MAIN FUNCTIONS SPECIFICATION
+Project: Voltera Electric Vehicle, Battery Ecommerce System (Mobile Application)
+Version: 1.0
+Date: 2026-06-07
+Prepared by: Software Business Analysis and Architecture Team
+
+====================================================================
+# Design Database/API Structure
+
+## 1) Architecture Context
+The mobile application is designed as a client application that consumes RESTful APIs from the existing Spring Boot backend. The solution supports role-based usage (Buyer, Seller, Admin) and core ecommerce flows for electric vehicles and EV batteries, including listing management, contract lifecycle, payment integration, dispute handling, and notification management.
+
+Data persistence is implemented in PostgreSQL with a normalized relational model. The backend currently exposes domain APIs under paths such as `/api/v1/auth`, `/api/post`, `/api/contract`, `/api/transactions`, `/api/vnpay`, `/api/refunds`, `/api/complaints`, and `/api/notifications`.
+
+## 2) Main Entities/Tables/Collections
+Primary entities identified from source code and schema:
+
+- user: End-user profile master data.
+- account: Authentication and authorization identity linked one-to-one with user.
+- bank: Seller/buyer bank account and balance information.
+- post: Product listing header (supports EV and battery listings).
+- vehicle: Vehicle-specific attributes mapped one-to-one with post.
+- battery: Battery-specific attributes mapped one-to-one with post.
+- battery_type: Dictionary/master data for battery classification.
+- vehicle_image, battery_image: Product media resources.
+- favorite_list: User-saved listing shortcuts.
+- contract: Negotiation and agreement artifact between buyer and seller.
+- transaction: Commercial settlement record associated with post/contract.
+- payment: Payment gateway transaction detail (VNPay metadata).
+- fee: Platform fee records for post lifecycle/renewal.
+- refund, refund_image: Refund request lifecycle and evidence attachments.
+- complaint, complaint_reply, complaint_image: Dispute and complaint handling lifecycle.
+- notification: User alert/events.
+- feedback, review: Post-transaction quality and rating artifacts.
+- report: Administrative KPI and monthly aggregation.
+- bank_transfer: Settlement transfer and payout tracking.
+
+## 3) Relationships Between Entities
+High-level cardinality:
+
+- user 1-1 account.
+- user 1-N post (as seller).
+- post 1-1 vehicle OR post 1-1 battery.
+- battery N-1 battery_type.
+- vehicle 1-N vehicle_image.
+- battery 1-N battery_image.
+- user N-N post via favorite_list.
+- post 1-N contract (business rule may limit active contract).
+- contract 1-N transaction (practical flow usually one major transaction).
+- transaction 1-N payment.
+- transaction 1-N refund.
+- refund 1-N refund_image.
+- user 1-N complaint; complaint 1-N complaint_reply and complaint_image.
+- user 1-N notification.
+- transaction 1-1 or 1-N feedback/review depending on business rule.
+- report 1-N transaction for reporting coverage.
+- bank 1-N bank_transfer; payment/transaction may map to bank_transfer events.
+
+Integrity rules include FK constraints, ON DELETE CASCADE/SET NULL for child lifecycle control, and identity PK generation.
+
+## 4) API Endpoint Suggestions
+The current backend already provides many endpoints. Mobile API organization should be grouped by bounded context:
+
+- Authentication:
+  - POST `/api/v1/auth/register`
+  - POST `/api/v1/auth/login`
+  - POST `/api/v1/auth/refresh`
+  - POST `/api/v1/auth/logout`
+  - POST `/api/v1/auth/google/callback`
+
+- OTP and Password:
+  - POST `/otp/request`
+  - POST `/otp/verify`
+  - POST `/otp/resend`
+  - POST `/otp/forgot/request`
+  - POST `/otp/forgot/verify`
+  - POST `/otp/forgot/reset`
+
+- Profile and User Admin:
+  - GET `/api/v1/users/me/profile`
+  - PUT `/api/v1/users/me/profile`
+  - GET `/me`
+  - PUT `/api/v1/admin/account/{id}/approved`
+  - PUT `/api/v1/admin/account/{id}/rejected`
+  - PUT `/api/v1/admin/account/{id}/lock`
+  - PUT `/api/v1/admin/account/{id}/unlock`
+
+- Product Listing and Search:
+  - POST `/api/post/create`
+  - GET `/api/post/list/{status}`
+  - GET `/api/post/filter/vehicles`
+  - GET `/api/post/filter/batteries`
+  - GET `/api/post/detail/{postId}`
+  - GET `/api/post/user/{userId}`
+
+- Favorites:
+  - POST `/api/favorites/add/{postID}`
+  - DELETE `/api/favorites/delete/{postID}`
+  - GET `/api/favorites`
+
+- Contract and Transaction:
+  - POST `/api/contract/create`
+  - PUT `/api/contract/{id}/sign`
+  - PUT `/api/contract/{id}/cancel`
+  - GET `/api/contract/{id}`
+  - GET `/api/contract/list`
+  - GET `/api/contract/transactions`
+  - GET `/api/transactions/{transactionStatus}`
+  - GET `/api/transactions/detail/{transactionId}`
+
+- Payment and Fee:
+  - POST `/api/vnpay/create-payment/{transactionId}`
+  - GET `/api/vnpay/return/{transactionId}`
+  - GET `/api/vnpay/prepare-payment/{transactionId}`
+  - POST `/api/fee/create-payment/{transactionId}`
+  - POST `/api/fee/renew/{postId}`
+
+- Refund:
+  - POST `/api/refunds/request-refund/{transactionId}`
+  - POST `/api/refunds/{refundId}/images`
+  - PUT `/api/refunds/accept/{refundId}`
+  - PUT `/api/refunds/reject/{refundId}`
+  - POST `/api/refunds/payment/{refundId}`
+  - GET `/api/refunds/payment/callback/{refundId}`
+  - POST `/api/refunds/claim-money/{refundId}`
+
+- Complaint and Resolution:
+  - POST `/api/complaints`
+  - GET `/api/complaints/status/{status}`
+  - GET `/api/complaints/my-complaints`
+  - GET `/api/complaints/{complaintId}`
+  - PUT `/api/complaints/{complaintId}/{complaintStatus}`
+  - POST `/api/reply-complaint/create-reply/{complaintId}`
+  - GET `/api/reply-complaint/unresolve`
+
+- Notification:
+  - GET `/api/notifications`
+  - PUT `/api/notifications/{notificationId}/read`
+  - PUT `/api/notifications/read-all`
+  - DELETE `/api/notifications/{notificationId}`
+
+- Upload:
+  - POST `/api/upload/product`
+  - POST `/api/upload/avatar`
+  - POST `/api/upload/contract/{id}/upload-pdf`
+  - POST `/api/upload/{complaintId}/images`
+  - POST `/api/upload/{refundId}/images`
+
+## 5) CRUD Operations Matrix (Core)
+
+- user: Create (register), Read (profile), Update (profile/avatar), Delete (admin lock/deactivate policy-driven).
+- account: Create (register), Read (admin lists), Update (approve/reject/lock/unlock), Delete (normally restricted).
+- post: Create, Read (list/detail/filter), Update (status moderation, renewal), Delete (soft-delete recommended).
+- vehicle/battery: Create with post, Read by post detail, Update by seller, Delete with post.
+- contract: Create, Read, Update (sign/cancel), Delete (usually not physical delete; status lifecycle).
+- transaction: Create from contract/payment preparation, Read by status/detail, Update status, Delete restricted.
+- payment: Create from gateway process, Read for reconciliation, Update callback status, Delete not recommended.
+- refund: Create request, Read by role/status, Update accept/reject/claim, Delete restricted.
+- complaint: Create, Read list/detail, Update status/reply, Delete policy-based.
+- notification: Create system event, Read list, Update read flag, Delete by owner.
+
+## 6) How Data Is Used by Each Screen
+
+- Authentication screens consume account and OTP APIs; create session tokens and identity context.
+- Home/catalog screens consume post summary, product type data, and filter endpoints.
+- Product detail screen aggregates post + vehicle/battery + media + seller profile data.
+- Favorite screen uses favorite_list plus post cards for quick revisit.
+- Seller listing management screen writes post/vehicle/battery and media payloads.
+- Contract screen consumes contract document metadata, signatures, and status transitions.
+- Payment screen uses prepared payment payload and callback results.
+- Order/transaction history screen reads transaction + payment status timeline.
+- Refund screen reads/writes refund records and evidence uploads.
+- Complaint screen reads/writes complaint and complaint reply threads.
+- Notification center screen reads notification list and read/unread updates.
+- Admin dashboard screens consume report aggregates, account moderation lists, and post/refund monitoring data.
+
+====================================================================
+# 1. Authentication and Authorization
+
+## Purpose
+Provide secure identity verification, role-based access control, and session lifecycle handling to protect business assets and enable personalized user experiences.
+
+## Process Description
+1. User opens Login/Register screen.
+2. User selects registration, credential login, or Google login.
+3. System validates request schema and credentials.
+4. On success, backend returns access token, refresh token, and profile context.
+5. Mobile app stores tokens securely (encrypted secure storage).
+6. App injects `Authorization: Bearer <token>` for protected APIs.
+7. On token expiration, app calls refresh API.
+8. User may logout to invalidate session.
+
+## Input
+- Registration payload: email, username, password, role, profile attributes.
+- Login payload: username/email and password.
+- OAuth callback identity data.
+- Refresh token.
+- Logout request username/session identity.
+
+## Output
+- JWT access token and refresh token.
+- Authenticated user profile snapshot.
+- Login/register success or business error messages.
+- Logout confirmation.
+
+## Evaluation Criteria
+- Authentication success rate >= 99% under normal network conditions.
+- Unauthorized requests return proper HTTP 401/403 consistently.
+- Token refresh completes without forcing user re-login in valid refresh window.
+- Session invalidation works immediately after logout.
+- Role restrictions (Buyer/Seller/Admin) are enforceable by API and UI route guards.
+
+====================================================================
+# 2. OTP Verification and Password Recovery
+
+## Purpose
+Mitigate account fraud, verify email ownership, and provide a controlled mechanism for password reset.
+
+## Process Description
+1. User requests OTP for registration or password reset.
+2. System checks email eligibility (already registered or not, depending on flow).
+3. OTP is generated and delivered through SMTP channel.
+4. User enters OTP in mobile UI.
+5. Backend verifies validity, expiry, and retry limits.
+6. For reset flow, user provides new password after OTP verification.
+7. System updates credential and returns confirmation.
+
+## Input
+- Email address.
+- OTP code.
+- Password reset payload (email, OTP, new password).
+
+## Output
+- OTP sent confirmation.
+- OTP verification status.
+- Password reset success/failure response.
+
+## Evaluation Criteria
+- OTP expiration policy is enforced (time-bound).
+- Reused/expired OTP is rejected.
+- Brute-force protection (attempt limits, lock window) is implemented.
+- Password reset updates credential atomically and securely.
+- Audit logs capture OTP request and verification events.
+
+====================================================================
+# 3. User Profile and Account Administration
+
+## Purpose
+Maintain accurate user identity/profile data and support administrative lifecycle actions for compliance and platform governance.
+
+## Process Description
+1. Authenticated user opens Profile screen.
+2. App requests current profile from backend.
+3. User edits profile fields and submits update.
+4. Backend validates and persists profile data.
+5. Admin accesses account moderation screens.
+6. Admin approves/rejects/locks/unlocks accounts.
+7. Status changes propagate to authorization and feature access.
+
+## Input
+- User profile update payload: name, phone, address, avatar URL, etc.
+- Admin action request: account id + action type.
+- Authorization token.
+
+## Output
+- Updated profile data.
+- Account moderation result objects.
+- Error feedback for invalid transitions.
+
+## Evaluation Criteria
+- Profile CRUD latency meets mobile UX threshold (< 2 seconds average).
+- Admin actions are role-protected and auditable.
+- Lock status blocks sensitive operations immediately.
+- API responses use consistent DTO contracts.
+- Validation prevents malformed personal data.
+
+====================================================================
+# 4. Product Catalog Browsing and Search
+
+## Purpose
+Enable buyers to discover EV and battery listings efficiently through filtering, sorting, and keyword search.
+
+## Process Description
+1. User opens catalog home.
+2. App loads listing cards by status (public/approved).
+3. User applies filters by product type and attributes.
+4. App calls `/filter/vehicles` or `/filter/batteries` endpoints.
+5. Backend returns matching posts with pagination strategy.
+6. User refines filters until desired set is reached.
+7. User taps item to open Product Detail screen.
+
+## Input
+- Query params: keyword, address, brand/model/version, battery specs, price range, year, range, etc.
+- Product status and category selection.
+
+## Output
+- List of post summaries.
+- Empty-state result when no matches are found.
+- Filter metadata for UI (selected criteria and counts).
+
+## Evaluation Criteria
+- Filter combinations return accurate data and do not leak restricted posts.
+- Response time remains acceptable for large datasets.
+- Search results are deterministic for the same query.
+- UI state preserves selected filters across navigation.
+- No server error for missing optional query params.
+
+====================================================================
+# 5. Product Detail and Media Presentation
+
+## Purpose
+Provide complete and trustworthy listing information to support user purchase decisions.
+
+## Process Description
+1. User selects a listing from catalog.
+2. App calls detail endpoint by post id.
+3. Backend composes data from `post` + subtype table (`vehicle` or `battery`) + media tables.
+4. UI renders specifications, price, condition, seller summary, and images.
+5. User can proceed to favorite, contract request, or contact/support actions.
+
+## Input
+- postId.
+- Optional auth token for personalized actions (favorite status, eligibility).
+
+## Output
+- Detailed post object.
+- Product image gallery URLs.
+- Related metadata for next actions.
+
+## Evaluation Criteria
+- Detail payload contains all mandatory fields for EV or battery category.
+- Missing optional fields are handled gracefully in UI.
+- Image loading failures provide fallback handling.
+- Data consistency between list card and detail screen is maintained.
+- Unauthorized users cannot access restricted internal data.
+
+====================================================================
+# 6. Seller Listing Management and Moderation
+
+## Purpose
+Allow sellers to publish EV/battery listings and enable admins to moderate content quality and policy compliance.
+
+## Process Description
+1. Seller opens Create Listing screen.
+2. Seller chooses listing type (vehicle or battery).
+3. Seller enters general post data and type-specific attributes.
+4. Seller uploads images through upload API.
+5. Backend creates post and related entity records.
+6. Listing enters moderation queue (PENDING).
+7. Admin reviews and approves/rejects with optional reason.
+8. Approved listings become visible in public catalog.
+
+## Input
+- PostRequest payload.
+- Media files for product gallery.
+- Admin moderation request (postId, action, reject reason).
+
+## Output
+- Created PostResponse with status.
+- ModerationResponse or RejectResponse.
+- Validation error details for missing/invalid fields.
+
+## Evaluation Criteria
+- Data validation ensures category-specific required fields.
+- Moderation actions update status and visibility reliably.
+- Rejected posts provide clear reason to seller.
+- File upload supports accepted formats and size limits.
+- No duplicate or orphan records after failed creation attempts.
+
+====================================================================
+# 7. Favorites Management
+
+## Purpose
+Improve buyer conversion by allowing users to bookmark interesting listings and revisit them later.
+
+## Process Description
+1. User taps favorite icon on list or detail screen.
+2. App sends add/remove request.
+3. Backend resolves current user from token and updates `favorite_list`.
+4. User opens Favorites screen to view saved listings.
+5. User can remove items from favorites.
+
+## Input
+- postID.
+- Authorization token.
+
+## Output
+- Add/remove operation result message.
+- Favorite list result set with post snapshots.
+
+## Evaluation Criteria
+- Same post cannot be duplicated in favorites for one user.
+- Remove operation is idempotent and stable.
+- Favorites list reflects changes immediately after action.
+- Unauthorized requests are blocked.
+- Feature operates correctly under token refresh events.
+
+====================================================================
+# 8. Contract Lifecycle Management
+
+## Purpose
+Digitize buyer-seller agreement workflows to ensure transaction governance, traceability, and legal consistency.
+
+## Process Description
+1. Buyer or seller initiates contract creation for a listing.
+2. Backend validates participant roles and listing eligibility.
+3. Contract record is created with initial status.
+4. Parties review terms and perform sign/cancel actions.
+5. Signed contract allows payment and transaction progression.
+6. Optional contract PDF is uploaded and linked.
+7. Contract status is retrievable in user contract list.
+
+## Input
+- ContractRequest payload.
+- Contract ID for status actions.
+- Auth token for role validation.
+- Optional PDF file.
+
+## Output
+- ContractResponse.
+- Contract status transition result.
+- Contract list for current user.
+
+## Evaluation Criteria
+- Contract creation enforces business preconditions.
+- Unauthorized user cannot sign on behalf of another participant.
+- Status transitions follow finite-state rules.
+- Contract file upload links to correct contract record.
+- Transaction creation is blocked until required signatures are satisfied.
+
+====================================================================
+# 9. Payment, Fee, and VNPay Integration
+
+## Purpose
+Enable secure online payment processing for transactions and platform fees with end-to-end status traceability.
+
+## Process Description
+1. User reaches payment stage from contract/transaction flow.
+2. App requests payment preparation endpoint.
+3. Backend creates gateway request and returns payment URL or payload.
+4. User completes VNPay process.
+5. VNPay callback endpoint receives result parameters.
+6. Backend verifies response code and updates payment/transaction status.
+7. App receives final state and displays success/failure message.
+8. Seller fee renewal and transaction fee APIs operate similarly.
+
+## Input
+- transactionId/refundId/postId depending on flow.
+- VNPay request payload and callback parameters.
+- Authorization token for protected operations.
+
+## Output
+- PaymentPrepareResponse.
+- VNPayResponse and VNPayRefundResponse.
+- Updated transaction/payment statuses.
+
+## Evaluation Criteria
+- Callback verification prevents tampering and double processing.
+- Failed or canceled payment does not mark transaction as paid.
+- Successful payment updates all dependent records atomically.
+- Retry behavior is safe and idempotent.
+- Reconciliation fields (gateway transaction no, bank code, response code) are stored completely.
+
+====================================================================
+# 10. Order/Transaction Tracking
+
+## Purpose
+Provide buyers and sellers with transparent visibility into deal progress, financial status, and historical records.
+
+## Process Description
+1. User opens My Orders/Transactions screen.
+2. App requests transactions by status.
+3. Backend returns transactions mapped to current user context.
+4. User opens transaction detail for full timeline and payment status.
+5. User triggers downstream actions (refund request, support, document view) when eligible.
+
+## Input
+- transactionStatus filter.
+- transactionId.
+- Authorization token.
+
+## Output
+- List of TransactionResponse DTOs.
+- Detailed transaction information.
+
+## Evaluation Criteria
+- Returned transactions belong only to requesting user role context.
+- Status labels are consistent with backend enum lifecycle.
+- Detail screen data aligns with payment and contract states.
+- Filtering by status returns accurate subsets.
+- No leakage of sensitive data from unrelated users.
+
+====================================================================
+# 11. Refund Management with Evidence Upload
+
+## Purpose
+Handle post-payment dispute resolution through a controlled refund lifecycle, including evidence submission and role-based approval.
+
+## Process Description
+1. Buyer creates refund request with reason for a transaction.
+2. Buyer uploads proof images.
+3. Seller reviews refund and chooses accept/reject.
+4. If accepted (or admin-forced), payment/refund settlement flow executes.
+5. Seller may process refund payment via VNPay integration.
+6. Buyer claims refunded amount when conditions are met.
+7. System records final refund status and timestamps.
+
+## Input
+- Refund reason and transactionId.
+- Refund status action (accept/reject/update).
+- Evidence files (Multipart).
+- Auth token and role context.
+
+## Output
+- RefundResponse objects.
+- Refund list by role/status.
+- Operation messages (upload success, claim success, payment URL).
+
+## Evaluation Criteria
+- Refund request eligibility checks prevent invalid duplicates.
+- Uploaded files are linked to correct refund id.
+- Accept/reject permissions are role-restricted.
+- Financial state changes are auditable and reversible only by policy.
+- Claim-money endpoint prevents repeated claiming.
+
+====================================================================
+# 12. Complaint and Dispute Resolution
+
+## Purpose
+Provide a formal channel for user complaints with traceable communication, status updates, and service accountability.
+
+## Process Description
+1. User submits complaint with problem category and description.
+2. Complaint receives initial status (e.g., PENDING).
+3. User or staff adds replies to complaint thread.
+4. Support/admin reviews unresolved complaints.
+5. Complaint status is updated to resolved/rejected as outcome is reached.
+6. Complaint details and historical replies remain accessible.
+
+## Input
+- ComplaintRequest payload.
+- complaintId and status parameters.
+- ReplyComplaintRequest payload.
+- Authorization token.
+
+## Output
+- Complaint object/detail.
+- ComplaintReplyResponse list.
+- Updated complaint status response.
+
+## Evaluation Criteria
+- Complaint creation validates required fields.
+- Reply endpoints preserve chronological ordering.
+- Status transition history is retained for audit.
+- Only authorized roles can update complaint status.
+- Search and unresolved filters return correct records.
+
+====================================================================
+# 13. Notification Center
+
+## Purpose
+Deliver timely updates for operational events (contract, payment, refund, complaint, moderation) and improve user responsiveness.
+
+## Process Description
+1. System emits notification events when business actions occur.
+2. User opens Notification screen.
+3. App calls notification list endpoint.
+4. User marks one notification as read or marks all as read.
+5. User may delete non-required notifications.
+6. Badge counters update accordingly.
+
+## Input
+- Authorization token.
+- notificationId for item actions.
+
+## Output
+- List of NotificationResponse DTOs.
+- Read/unread update confirmation.
+- Delete confirmation.
+
+## Evaluation Criteria
+- Notifications are user-scoped and not visible cross-account.
+- Read/unread status updates persist reliably.
+- Bulk read operation supports full list without data corruption.
+- Notification ordering is by creation time descending.
+- UI badge count and backend read flags remain synchronized.
+
+====================================================================
+# 14. Administrative Governance and Reporting
+
+## Purpose
+Support platform governance through account moderation, post moderation, refund oversight, and KPI reporting.
+
+## Process Description
+1. Admin logs into secured admin views.
+2. Admin reviews pending seller accounts and listing approvals.
+3. Admin audits refunds and can accept/reject under policy.
+4. Admin triggers monthly report generation or views existing reports.
+5. Dashboard displays transaction counts, revenue, and key indicators.
+
+## Input
+- Admin authorization token.
+- moderation IDs and action commands.
+- report month/year parameters.
+
+## Output
+- Approve/reject/lock/unlock responses.
+- ReportResponse list and monthly details.
+- Administrative stats payloads.
+
+## Evaluation Criteria
+- Admin-only endpoints are inaccessible to non-admin roles.
+- Report values match underlying transaction/payment data.
+- Moderation operations are logged with actor and timestamp.
+- Dashboard can be regenerated without duplicate report corruption.
+- Exception handling returns actionable error messages.
+
+====================================================================
+# 15. Media Upload and File Management
+
+## Purpose
+Provide secure and scalable upload capability for product images, contract documents, avatars, and dispute evidence.
+
+## Process Description
+1. User selects media files in mobile app.
+2. App submits multipart upload request to corresponding endpoint.
+3. Backend uploads file to object storage (S3 bucket) and obtains URL.
+4. URL is persisted to related domain table (post image, avatar, complaint image, refund image, contract file).
+5. UI displays uploaded media and allows downstream usage.
+
+## Input
+- Multipart file(s).
+- Folder/category parameter.
+- Optional entity id and auth token.
+
+## Output
+- Uploaded file URLs.
+- Upload status or error messages.
+
+## Evaluation Criteria
+- Accepted file types and size limits are enforced.
+- Upload failures do not leave inconsistent references.
+- Access to protected upload flows is authenticated.
+- URL mapping points to correct business entity.
+- Performance remains acceptable for multiple file upload.
+
+====================================================================
+# Apply State Management
+
+State management is defined for a mobile client architecture using a unidirectional data flow pattern (e.g., Bloc/Redux/MVVM store) with immutable state snapshots and side-effect handling for API/network operations.
+
+## Authentication State
+
+### Purpose
+Manage login session, tokens, user identity, and authorization context across app lifecycle.
+
+### Input
+- Login/register payload.
+- Refresh/logout events.
+- Token expiration events.
+
+### Output
+- Authenticated/unauthenticated state.
+- User role claims and profile summary.
+- Token metadata (access, refresh, expiry).
+
+### Evaluation Criteria
+- Token refresh occurs automatically before protected API failure when possible.
+- Logout clears all secure session artifacts.
+- Route guards react correctly to role and auth changes.
+- App cold start restores valid session state from secure storage.
+
+## Product State
+
+### Purpose
+Maintain catalog list, filters, sorting, detail cache, and loading/error indicators.
+
+### Input
+- Filter/sort/search events.
+- Product list/detail API responses.
+- Favorite toggle events.
+
+### Output
+- Filtered product collection.
+- Selected product detail view model.
+- Pagination and loading states.
+
+### Evaluation Criteria
+- State updates are deterministic and testable.
+- Filter criteria persist across navigation.
+- List and detail cache invalidation follows update events.
+- Error states expose retry capability.
+
+## Cart State
+
+### Purpose
+Provide a temporary pre-order selection context for future mobile enhancement and conversion funnel optimization.
+
+### Input
+- Add/remove item actions.
+- Quantity/update actions.
+- Cart clear or checkout initialization events.
+
+### Output
+- Current cart items and totals.
+- Eligibility flags for checkout.
+- Validation messages.
+
+### Evaluation Criteria
+- Duplicate item handling follows business rules.
+- Cart totals are accurate under all item modifications.
+- Cart state survives app background/foreground cycles.
+- Checkout entry is blocked for invalid cart conditions.
+
+## Order State
+
+### Purpose
+Track contract, transaction, payment, and refund progress under a unified order timeline.
+
+### Input
+- Contract actions (create/sign/cancel).
+- Payment callbacks.
+- Refund requests and status updates.
+
+### Output
+- Order list by status.
+- Detailed timeline events and current status.
+- Payment and refund substate indicators.
+
+### Evaluation Criteria
+- Order status mapping reflects backend lifecycle without ambiguity.
+- Timeline updates near real-time after critical events.
+- Failed payment/refund states are recoverable or clearly explained.
+- Historical order records remain immutable for audit.
+
+## Notification State
+
+### Purpose
+Manage notification feed, badge counts, and read/unread synchronization.
+
+### Input
+- Fetch notifications action.
+- Mark-as-read / mark-all / delete actions.
+- Push/event triggers.
+
+### Output
+- Sorted notification list.
+- Unread counter.
+- Operation result flags.
+
+### Evaluation Criteria
+- Badge count is consistent with unread records.
+- Read/unread transitions are idempotent.
+- State handles pagination or large notification sets.
+- Notification actions update UI without full app reload.
+
+## Chat State
+
+### Purpose
+Support customer support conversation context (planned enhancement aligned with complaint workflow).
+
+### Input
+- Outgoing message events.
+- Incoming message events.
+- Thread load/reload actions.
+
+### Output
+- Conversation thread list.
+- Message delivery/read statuses.
+- Typing/connection indicators.
+
+### Evaluation Criteria
+- Message ordering and timestamp consistency are guaranteed.
+- Offline-to-online synchronization is handled without data loss.
+- Duplicate message processing is prevented.
+- Conversation visibility is scoped by authorized participants.
+
+====================================================================
+## Main User Flow
+Login
+-> Browse Products
+-> View Product Details
+-> Add To Cart
+-> Shopping Cart
+-> Checkout
+-> Create Order
+-> Notifications
+-> Support Chat
+-> Store Location
+
+====================================================================
+End of Document
+
