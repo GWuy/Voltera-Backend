@@ -42,7 +42,10 @@ public class SecurityConfig {
                                 "/otp/**",
                                 "/api/vnpay/**",
                                 "/api/fee/return/**",
-                                "/api/post/public/**"
+                                "/api/post/public/**",
+                                "/api/post/list/**",
+                                "/api/post/detail/**",
+                                "/api/post/filter/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

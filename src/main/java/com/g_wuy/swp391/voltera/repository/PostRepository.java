@@ -141,12 +141,14 @@ public interface PostRepository extends JpaRepository<Post, Integer>, JpaSpecifi
     @Query("SELECT p FROM Post p WHERE p.battery IS NOT NULL AND p.status = 'APPROVE' ORDER BY p.createdAt DESC")
     List<Post> findAllBatteryPosts();
 
-    @Query(value = "SELECT vi.ImageURL FROM Vehicle v " +
-            "JOIN Post p ON p.PostID = v.PostID " +
-            "JOIN VehicleImage vi ON vi.PostID = v.PostID " +
-            "WHERE p.PostID = :postId " +
-            "LIMIT 1 ",
-            nativeQuery = true)
+        @Query(value = """
+        SELECT vi.image_url
+        FROM vehicle v
+        JOIN post p ON p.post_id = v.post_id
+        JOIN vehicle_image vi ON vi.post_id = v.post_id
+        WHERE p.post_id = :postId
+        LIMIT 1
+        """, nativeQuery = true)
     String getThumbnailUrlByPostId(@Param("postId") int postId);
 
 
