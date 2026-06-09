@@ -56,6 +56,7 @@ public class AccountService {
         User userRegis = new User();
         userRegis.setEmail(email);
         userRegis.setEmailVerified(true);
+        userRegis.setIsUpdatedProfile(false);
         User userSaved = userRepository.save(userRegis);
 
         Account account = accountMapper.toAccount(registerRequest);

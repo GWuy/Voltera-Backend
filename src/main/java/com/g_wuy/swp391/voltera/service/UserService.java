@@ -135,6 +135,7 @@ public class UserService {
         user.setPhone(profileRequest.getPhone());
         user.setGender(profileRequest.getGender());
         user.setAddress(profileRequest.getAddress());
+        user.setIsUpdatedProfile(true);
 
         return userRepository.save(user);
     }
