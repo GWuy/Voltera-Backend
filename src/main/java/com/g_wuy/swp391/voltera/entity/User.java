@@ -1,6 +1,7 @@
 package com.g_wuy.swp391.voltera.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -57,5 +58,10 @@ public class User {
 
     @Column(name = "email_verified")
     private Boolean emailVerified;
+
+    @NotNull
+    @ColumnDefault("false")
+    @Column(name = "is_updated_profile", nullable = false)
+    private Boolean isUpdatedProfile;
 
 }

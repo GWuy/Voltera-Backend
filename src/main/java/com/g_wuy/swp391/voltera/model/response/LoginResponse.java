@@ -9,5 +9,6 @@ public class LoginResponse {
     private Integer userId;
     private String token;
     private String role;
+    private boolean isUpdatedProfile;
 
 }

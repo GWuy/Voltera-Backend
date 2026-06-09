@@ -79,8 +79,11 @@ public class UserService {
         account.setRefreshToken(refreshToken);
         accountRepository.save(account);
 
+        User userLogin = account.getUser();
+
         LoginResponse response = accountMapper.toLoginResponse(account);
         response.setToken(accessToken);
+        response.setUpdatedProfile(userLogin.getIsUpdatedProfile());
         return response;
     }
 
