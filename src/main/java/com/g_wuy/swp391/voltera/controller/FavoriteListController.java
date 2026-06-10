@@ -29,7 +29,7 @@ public class FavoriteListController {
     UserService userService;
 
     @PostMapping("/add/{postID}")
-    public ResponseEntity<FavoriteList> addToList(
+    public ResponseEntity<Void> addToList(
             @RequestHeader("Authorization") String authHeader,
             @PathVariable("postID") Integer postId) {
         String token = authHeader.substring(7);
@@ -38,7 +38,8 @@ public class FavoriteListController {
         if (username != null) {
             userAdd = userService.findUserByUsername(username);
         }
-        return ResponseEntity.ok(favoriteService.addToFavoriteList(userAdd, postId));
+        FavoriteList fl = favoriteService.addToFavoriteList(userAdd, postId);
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/delete/{postID}")

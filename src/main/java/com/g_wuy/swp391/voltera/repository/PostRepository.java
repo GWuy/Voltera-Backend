@@ -39,8 +39,8 @@ public interface PostRepository extends JpaRepository<Post, Integer>, JpaSpecifi
 
     @Query(value = """
                 SELECT p.* FROM post p
-                JOIN vehicle v ON p.postid = v.postid
-                JOIN "user" s ON s.userid = p.sellerid
+                JOIN vehicle v ON p.post_id = v.post_id
+                JOIN "user" s ON s.user_id = p.seller_id
                 WHERE
                     (:keyword IS NULL OR LOWER(v.model) LIKE LOWER(CONCAT('%', :keyword, '%')))
                 AND (:address IS NULL OR LOWER(s.address) LIKE LOWER(CONCAT('%', :address, '%')))
@@ -53,13 +53,13 @@ public interface PostRepository extends JpaRepository<Post, Integer>, JpaSpecifi
                 AND (:maxOdo IS NULL OR v.odo <= :maxOdo)
                 AND (:minRange IS NULL OR v.range >= :minRange)
                 AND (:maxRange IS NULL OR v.range <= :maxRange)
-                AND (:bodyInsurance IS NULL OR v.bodyinsurance = TRUE)
-                AND (:vehicleInspection IS NULL OR v.vehicleinspection = TRUE)
+                AND (:bodyInsurance IS NULL OR v.body_insurance = TRUE)
+                AND (:vehicleInspection IS NULL OR v.vehicle_inspection = TRUE)
                 AND (:minPrice IS NULL OR p.price >= :minPrice)
                 AND (:maxPrice IS NULL OR p.price <= :maxPrice)
-                AND (:minYearManufacture IS NULL OR v.yearmanufacture >= :minYearManufacture)
-                AND (:maxYearManufacture IS NULL OR v.yearmanufacture <= :maxYearManufacture)
-                AND (:numberOfSeat IS NULL OR v.numberofseat = :numberOfSeat)
+                AND (:minYearManufacture IS NULL OR v.year_manufacture >= :minYearManufacture)
+                AND (:maxYearManufacture IS NULL OR v.year_manufacture <= :maxYearManufacture)
+                AND (:numberOfSeat IS NULL OR v.number_of_seat = :numberOfSeat)
                 AND LOWER(v.status) = 'available'
             """, nativeQuery = true)
     List<Post> filterVehicles(
@@ -85,31 +85,31 @@ public interface PostRepository extends JpaRepository<Post, Integer>, JpaSpecifi
 
     @Query(value = """
                 SELECT p.* FROM post p
-                INNER JOIN battery b ON p.PostID = b.PostID
-                INNER JOIN batterytype bt ON b.BatteryTypeID = bt.ID
-                INNER JOIN "user" s ON s.UserID = p.SellerID
+                INNER JOIN battery b ON p.post_id = b.post_id
+                INNER JOIN battery_type bt ON b.battery_type_id = bt.id
+                INNER JOIN "user" s ON s.user_id = p.seller_id
                 WHERE
-                    (:keyword IS NULL OR LOWER(bt.typename) LIKE LOWER(CONCAT('%', CAST(:keyword AS TEXT), '%')))
+                    (:keyword IS NULL OR LOWER(bt.type_name) LIKE LOWER(CONCAT('%', CAST(:keyword AS TEXT), '%')))
                 AND (:address IS NULL OR LOWER(s.address) LIKE LOWER(CONCAT('%', CAST(:address AS TEXT), '%')))
-                AND (:batteryType IS NULL OR LOWER(bt.typename) LIKE LOWER(CONCAT('%', CAST(:batteryType AS TEXT), '%')))
-                AND (:serialNumber IS NULL OR LOWER(b.serialnumber) LIKE LOWER(CONCAT('%', CAST(:serialNumber AS TEXT), '%')))
-                AND (:minOriginCapacity IS NULL OR b.origincapacity >= :minOriginCapacity)
-                AND (:maxOriginCapacity IS NULL OR b.origincapacity <= :maxOriginCapacity)
-                AND (:minRemainingCapacity IS NULL OR b.remainingcapacity >= :minRemainingCapacity)
-                AND (:maxRemainingCapacity IS NULL OR b.remainingcapacity <= :maxRemainingCapacity)
-                AND (:minMileageCovered IS NULL OR b.mileagecovered >= :minMileageCovered)
-                AND (:maxMileageCovered IS NULL OR b.mileagecovered <= :maxMileageCovered)
+                AND (:batteryType IS NULL OR LOWER(bt.type_name) LIKE LOWER(CONCAT('%', CAST(:batteryType AS TEXT), '%')))
+                AND (:serialNumber IS NULL OR LOWER(b.serial_number) LIKE LOWER(CONCAT('%', CAST(:serialNumber AS TEXT), '%')))
+                AND (:minOriginCapacity IS NULL OR b.origin_capacity >= :minOriginCapacity)
+                AND (:maxOriginCapacity IS NULL OR b.origin_capacity <= :maxOriginCapacity)
+                AND (:minRemainingCapacity IS NULL OR b.remaining_capacity >= :minRemainingCapacity)
+                AND (:maxRemainingCapacity IS NULL OR b.remaining_capacity <= :maxRemainingCapacity)
+                AND (:minMileageCovered IS NULL OR b.mileage_covered >= :minMileageCovered)
+                AND (:maxMileageCovered IS NULL OR b.mileage_covered <= :maxMileageCovered)
                 AND (:minVoltage IS NULL OR b.voltage >= :minVoltage)
                 AND (:maxVoltage IS NULL OR b.voltage <= :maxVoltage)
-                AND (:minCycleCount IS NULL OR b.cyclecount >= :minCycleCount)
-                AND (:maxCycleCount IS NULL OR b.cyclecount <= :maxCycleCount)
+                AND (:minCycleCount IS NULL OR b.cycle_count >= :minCycleCount)
+                AND (:maxCycleCount IS NULL OR b.cycle_count <= :maxCycleCount)
                 AND (:warranty IS NULL OR LOWER(b.warranty) LIKE LOWER(CONCAT('%', CAST(:warranty AS TEXT), '%')))
                 AND (:minWeight IS NULL OR b.weight >= :minWeight)
                 AND (:maxWeight IS NULL OR b.weight <= :maxWeight)
                 AND (:lifeCycle IS NULL OR LOWER(b.lifecycle) LIKE LOWER(CONCAT('%', CAST(:lifeCycle AS TEXT), '%')))
-                AND (:minPrice IS NULL OR p.price >= :minPrice)
-                AND (:maxPrice IS NULL OR p.price <= :maxPrice)
-                AND p.status = 'APPROVE'
+                AND p.price >= COALESCE(:minPrice, p.price)
+                AND p.price <= COALESCE(:maxPrice, p.price)
+                AND LOWER(p.status) = 'approve'
             """, nativeQuery = true)
     List<Post> filterBatteries(
             @Param("keyword") String keyword,
@@ -141,14 +141,17 @@ public interface PostRepository extends JpaRepository<Post, Integer>, JpaSpecifi
     @Query("SELECT p FROM Post p WHERE p.battery IS NOT NULL AND p.status = 'APPROVE' ORDER BY p.createdAt DESC")
     List<Post> findAllBatteryPosts();
 
-        @Query(value = """
-        SELECT vi.image_url
-        FROM vehicle v
-        JOIN post p ON p.post_id = v.post_id
-        JOIN vehicle_image vi ON vi.post_id = v.post_id
-        WHERE p.post_id = :postId
-        LIMIT 1
-        """, nativeQuery = true)
+    @Query(value = """
+            SELECT
+                COALESCE(vi.image_url, bi.image_url) AS image_url
+            FROM post p
+            LEFT JOIN vehicle v ON v.post_id = p.post_id
+            LEFT JOIN battery b ON b.post_id = p.post_id
+            LEFT JOIN vehicle_image vi ON vi.post_id = v.post_id
+            LEFT JOIN battery_image bi ON bi.post_id = b.post_id
+            WHERE p.post_id = :postId
+            LIMIT 1;
+            """, nativeQuery = true)
     String getThumbnailUrlByPostId(@Param("postId") int postId);
 
 
