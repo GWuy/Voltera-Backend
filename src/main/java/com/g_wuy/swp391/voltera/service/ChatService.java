@@ -36,6 +36,11 @@ public class ChatService {
     @Transactional
     public ChatMessageResponse sendMessage(String token, ChatMessageRequest request) {
         String username = jwtService.extractUsername(token.substring(7));
+        return sendMessageByUsername(username, request);
+    }
+
+    @Transactional
+    public ChatMessageResponse sendMessageByUsername(String username, ChatMessageRequest request) {
         User sender = userService.findUserByUsername(username);
         if (sender == null) {
             throw new BusinessException("User not found");

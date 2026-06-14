@@ -8,6 +8,7 @@ import com.g_wuy.swp391.voltera.service.JwtService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
@@ -16,8 +17,10 @@ import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/chat")
 @RequiredArgsConstructor
@@ -28,8 +31,6 @@ public class ChatController {
     SimpMessagingTemplate messagingTemplate;
     JwtService jwtService;
 
-    // REST Endpoints
-    
     @GetMapping("/conversations")
     public ResponseEntity<List<ConversationResponse>> getConversations(
             @RequestHeader("Authorization") String auth) {
@@ -53,30 +54,51 @@ public class ChatController {
         return ResponseEntity.ok().build();
     }
 
-    // WebSocket Endpoints
-
     @MessageMapping("/chat.send")
-    public void sendMessage(@Payload ChatMessageRequest request, SimpMessageHeaderAccessor headerAccessor) {
-        String token = headerAccessor.getFirstNativeHeader("Authorization");
-        if (token == null) {
-            return;
+    public void sendMessage(
+            @Payload ChatMessageRequest request,
+            SimpMessageHeaderAccessor headerAccessor,
+            Principal principal) {
+
+        try {
+            log.debug("========== CHAT SEND ==========");
+            log.debug("Payload: {}", request);
+
+            String username = null;
+
+            if (principal != null) {
+                username = principal.getName();
+                log.debug("Principal username: {}", username);
+            }
+
+            if (username == null) {
+                String authHeader = headerAccessor.getFirstNativeHeader("Authorization");
+                log.debug("Fallback Authorization header: {}", authHeader);
+                if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                    log.warn("No authentication found in STOMP SEND");
+                    return;
+                }
+                String token = authHeader.substring(7);
+                username = jwtService.extractUsername(token);
+            }
+
+            ChatMessageResponse response = chatService.sendMessageByUsername(username, request);
+
+            log.debug("Sending to /user/{}/queue/messages", request.getReceiverId());
+            messagingTemplate.convertAndSendToUser(
+                    String.valueOf(request.getReceiverId()),
+                    "/queue/messages",
+                    response
+            );
+
+            messagingTemplate.convertAndSendToUser(
+                    username,
+                    "/queue/messages",
+                    response
+            );
+
+        } catch (Exception e) {
+            log.error("Error processing chat.send", e);
         }
-
-        ChatMessageResponse response = chatService.sendMessage(token, request);
-
-        // Send to receiver's queue
-        messagingTemplate.convertAndSendToUser(
-                request.getReceiverId().toString(),
-                "/queue/messages",
-                response
-        );
-        
-        // Send back to sender's queue for confirmation and UI update
-        String senderUsername = jwtService.extractUsername(token.substring(7));
-        messagingTemplate.convertAndSendToUser(
-                senderUsername,
-                "/queue/messages",
-                response
-        );
     }
 }
