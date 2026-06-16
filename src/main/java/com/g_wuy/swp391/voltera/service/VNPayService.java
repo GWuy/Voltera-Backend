@@ -84,7 +84,7 @@ public class VNPayService {
             vnp_Params.put("vnp_OrderInfo", request.getOrderInfo());
             vnp_Params.put("vnp_OrderType", "other");
             vnp_Params.put("vnp_Locale", "vn");
-            vnp_Params.put("vnp_ReturnUrl", returnUrlWithTxn);
+            vnp_Params.put("vnp_ReturnUrl", vnPayConfig.getVnpReturnUrl());
             vnp_Params.put("vnp_IpAddr", vnp_IpAddr);
 
             String createDate = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
@@ -105,6 +105,11 @@ public class VNPayService {
 
             String vnp_SecureHash = vnPayConfig.hmacSHA512(vnPayConfig.getSecretKey(), hashData.toString());
             String paymentUrl = vnPayConfig.getVnpPayUrl() + "?" + query + "vnp_SecureHash=" + vnp_SecureHash;
+
+
+            log.info("TMN Code = {}", vnPayConfig.getVnpTmnCode());
+            log.info("Return URL = {}", returnUrlWithTxn);
+            log.info("Payment URL = {}", paymentUrl);
 
             return VNPayResponse.builder()
                     .code("00")

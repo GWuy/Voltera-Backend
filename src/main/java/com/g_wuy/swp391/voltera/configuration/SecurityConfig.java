@@ -41,6 +41,7 @@ public class SecurityConfig {
                                 "/api/v1/auth/**",
                                 "/otp/**",
                                 "/api/vnpay/**",
+                                "/api/payos/**",
                                 "/api/fee/return/**",
                                 "/api/post/public/**",
                                 "/api/post/list/**",
