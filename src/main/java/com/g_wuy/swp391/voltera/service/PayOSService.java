@@ -22,6 +22,8 @@ import vn.payos.model.webhooks.WebhookData;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.Optional;
 
 @Service
 @Transactional
@@ -33,7 +35,7 @@ public class PayOSService {
     TransactionRepository transactionRepository;
     PaymentRepository paymentRepository;
 
-    public PayOSCreateResponse createPayment(Integer transactionId, PayOSRequest request, HttpServletRequest httpRequest) {
+    public PayOSCreateResponse createPayment(Integer transactionId, PayOSRequest request) {
         Transaction transaction = transactionRepository.findById(transactionId).orElseThrow(() -> new RuntimeException("Transaction not found: " + transactionId));
         BigDecimal amount = transaction.getPrice() != null ? transaction.getPrice() : BigDecimal.ZERO;
         String orderInfo = request != null && request.getOrderInfo() != null ? request.getOrderInfo() : "Voltera transaction #" + transactionId;
@@ -61,29 +63,94 @@ public class PayOSService {
     }
 
     public void processWebhook(WebhookData data) {
-        log.info("===== PAYOS WEBHOOK =====");
-        log.info("OrderCode: {}", data.getOrderCode());
-        log.info("Code: {}", data.getCode());
-
-        Payment payment =
+        log.info("Webhook orderCode={}", data.getOrderCode());
+        Optional<Payment> paymentOpt =
                 paymentRepository.findByTransactionCode(
-                        String.valueOf(data.getOrderCode())
-                ).orElseThrow(
-                        () -> new RuntimeException("Payment not found")
-                );
+                        String.valueOf(data.getOrderCode()));
 
-        Transaction transaction =
-                payment.getTransaction();
-        if ("PAID".equalsIgnoreCase(transaction.getTransactionStatus()) || "FAILED".equalsIgnoreCase(transaction.getTransactionStatus()) || "CANCELLED".equalsIgnoreCase(transaction.getTransactionStatus()) || "DONE".equalsIgnoreCase(transaction.getTransactionStatus()))
+        if (paymentOpt.isEmpty()) {
+            log.warn("Payment not found. orderCode={}", data.getOrderCode());
             return;
-        String status = "00".equals(data.getCode()) ? "PAID" : "FAILED";
-        transaction.setTransactionStatus(status);
-        transaction.setUpdateAt(Instant.now());
+        }
+
+        Payment payment = paymentOpt.get();
+        Transaction transaction = payment.getTransaction();
+
+        if ("00".equals(data.getCode())) {
+
+            payment.setPaymentStatus("SUCCESS");
+            transaction.setTransactionStatus("APPROVE");
+
+        } else {
+
+            payment.setPaymentStatus("FAILED");
+            transaction.setTransactionStatus("FAILED");
+        }
+
+        paymentRepository.save(payment);
         transactionRepository.save(transaction);
+    }
+
+    public Map<String, Object> syncTransactionStatus(Integer transactionId) {
+
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() ->
+                        new RuntimeException("Transaction not found: " + transactionId));
+
+        // Nếu transaction đã ở trạng thái cuối thì không xử lý nữa
+        if (isFinalStatus(transaction.getTransactionStatus())) {
+            return Map.of(
+                    "success", true,
+                    "transactionId", transactionId,
+                    "transactionStatus", transaction.getTransactionStatus()
+            );
+        }
+
+        Payment payment = paymentRepository.findPaymentByTransactionId(transactionId);
+
+        if (payment != null) {
+
+            String paymentStatus = payment.getPaymentStatus() == null
+                    ? "PENDING"
+                    : payment.getPaymentStatus().toUpperCase();
+
+            switch (paymentStatus) {
+
+                case "SUCCESS":
+                case "COMPLETED":
+                case "PAID":
+                    transaction.setTransactionStatus("APPROVE");
+                    break;
+
+                case "FAILED":
+                case "CANCELLED":
+                    transaction.setTransactionStatus("FAILD");
+                    break;
+
+                default:
+                    // PENDING -> giữ nguyên trạng thái hiện tại
+                    break;
+            }
+
+            transaction.setUpdateAt(Instant.now());
+            transactionRepository.save(transaction);
+        }
+
+        return Map.of(
+                "success", true,
+                "transactionId", transactionId,
+                "transactionStatus", transaction.getTransactionStatus()
+        );
     }
 
     public PayOSCreateResponse getPaymentStatus(Integer transactionId) {
         Transaction transaction = transactionRepository.findById(transactionId).orElseThrow(() -> new RuntimeException("Transaction not found: " + transactionId));
         return PayOSCreateResponse.builder().transactionId(transactionId).checkoutUrl(null).orderCode(null).paymentLinkId(null).build();
+    }
+
+    private boolean isFinalStatus(String status) {
+        if (status == null) return false;
+        String s = status.toUpperCase();
+        return "APPROVE".equals(s) || "FAILD".equals(s) || "DONE".equals(s) || "FAILED".equals(s) || "CANCELLED".equals(s);
     }
 }

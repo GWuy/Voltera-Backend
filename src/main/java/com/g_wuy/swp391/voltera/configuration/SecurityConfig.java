@@ -48,6 +48,7 @@ public class SecurityConfig {
                                 "/api/post/detail/**",
                                 "/api/post/filter/**",
                                 "/ws/**",
+                                "/api/payos/webhook",
                                 "/ws"
                         ).permitAll()
                         .anyRequest().authenticated()
