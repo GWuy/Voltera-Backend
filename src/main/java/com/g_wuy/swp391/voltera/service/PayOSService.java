@@ -39,7 +39,21 @@ public class PayOSService {
         String orderInfo = request != null && request.getOrderInfo() != null ? request.getOrderInfo() : "Voltera transaction #" + transactionId;
         long orderCode = Long.parseLong(transactionId + String.valueOf(System.currentTimeMillis()).substring(7));
         PaymentLinkItem item = PaymentLinkItem.builder().name(orderInfo).price(amount.longValue()).quantity(1).build();
-        CreatePaymentLinkRequest payload = CreatePaymentLinkRequest.builder().orderCode(orderCode).amount(amount.longValue()).description(orderInfo).returnUrl("voltera://payment/callback").cancelUrl("voltera://payment/callback?status=cancelled").item(item).build();
+        CreatePaymentLinkRequest payload = CreatePaymentLinkRequest.builder()
+                .orderCode(orderCode)
+                .amount(amount.longValue())
+                .description(orderInfo)
+                .returnUrl(
+                        "voltera://payment/callback"
+                                + "?transactionId=" + transactionId
+                )
+                .cancelUrl(
+                        "voltera://payment/callback"
+                                + "?transactionId=" + transactionId
+                                + "&status=CANCELLED"
+                )
+                .item(item)
+                .build();
         CreatePaymentLinkResponse created = payOS.paymentRequests().create(payload);
         Payment payment = Payment.builder().transaction(transaction).paymentMethod("PAYOS").paymentStatus("PENDING").transactionCode(String.valueOf(orderCode)).amount(amount).orderInfo(orderInfo).paymentDate(LocalDateTime.now()).build();
         paymentRepository.save(payment);
@@ -47,8 +61,19 @@ public class PayOSService {
     }
 
     public void processWebhook(WebhookData data) {
-        Integer transactionId = extractTransactionId(String.valueOf(data.getOrderCode()));
-        Transaction transaction = transactionRepository.findById(transactionId).orElseThrow(() -> new RuntimeException("Transaction not found: " + transactionId));
+        log.info("===== PAYOS WEBHOOK =====");
+        log.info("OrderCode: {}", data.getOrderCode());
+        log.info("Code: {}", data.getCode());
+
+        Payment payment =
+                paymentRepository.findByTransactionCode(
+                        String.valueOf(data.getOrderCode())
+                ).orElseThrow(
+                        () -> new RuntimeException("Payment not found")
+                );
+
+        Transaction transaction =
+                payment.getTransaction();
         if ("PAID".equalsIgnoreCase(transaction.getTransactionStatus()) || "FAILED".equalsIgnoreCase(transaction.getTransactionStatus()) || "CANCELLED".equalsIgnoreCase(transaction.getTransactionStatus()) || "DONE".equalsIgnoreCase(transaction.getTransactionStatus()))
             return;
         String status = "00".equals(data.getCode()) ? "PAID" : "FAILED";
@@ -60,9 +85,5 @@ public class PayOSService {
     public PayOSCreateResponse getPaymentStatus(Integer transactionId) {
         Transaction transaction = transactionRepository.findById(transactionId).orElseThrow(() -> new RuntimeException("Transaction not found: " + transactionId));
         return PayOSCreateResponse.builder().transactionId(transactionId).checkoutUrl(null).orderCode(null).paymentLinkId(null).build();
-    }
-
-    private Integer extractTransactionId(String orderCode) {
-        return Integer.parseInt(orderCode.substring(0, Math.max(1, orderCode.length() - 3)));
     }
 }

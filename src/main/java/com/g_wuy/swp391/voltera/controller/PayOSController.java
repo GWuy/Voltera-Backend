@@ -30,14 +30,24 @@ public class PayOSController {
     }
 
     @GetMapping("/return/{transactionId}")
-    public ResponseEntity<Void> returnUrl(@PathVariable Integer transactionId) { return ResponseEntity.status(302).header("Location", "voltera://payment/callback?transactionId=" + transactionId).build(); }
+    public ResponseEntity<Void> returnUrl(@PathVariable Integer transactionId) {
+        return ResponseEntity.status(302).header("Location", "voltera://payment/callback?transactionId=" + transactionId).build();
+    }
 
     @GetMapping("/cancel/{transactionId}")
-    public ResponseEntity<Void> cancelUrl(@PathVariable Integer transactionId) { return ResponseEntity.status(302).header("Location", "voltera://payment/callback?transactionId=" + transactionId + "&status=cancelled").build(); }
+    public ResponseEntity<Void> cancelUrl(@PathVariable Integer transactionId) {
+        return ResponseEntity.status(302).header("Location", "voltera://payment/callback?transactionId=" + transactionId + "&status=cancelled").build();
+    }
 
     @PostMapping("/webhook")
     public ResponseEntity<Map<String, Object>> webhook(@RequestBody Object body) {
+        log.info("PAYOS WEBHOOK RECEIVED: {}", body);
         WebhookData data = payOS.webhooks().verify(body);
+        log.info(
+                "orderCode={}, code={}",
+                data.getOrderCode(),
+                data.getCode()
+        );
         payOSService.processWebhook(data);
         return ResponseEntity.ok(Map.of("success", true));
     }
