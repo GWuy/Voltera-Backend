@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PayOSResponse {
+public class PayOSCreateResponse {
     private String checkoutUrl;
     private String paymentLinkId;
     private Long orderCode;

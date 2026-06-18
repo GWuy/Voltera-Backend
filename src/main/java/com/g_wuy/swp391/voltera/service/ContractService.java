@@ -9,7 +9,9 @@ import com.g_wuy.swp391.voltera.mapper.ContractMapper;
 import com.g_wuy.swp391.voltera.mapper.TransactionMapper;
 import com.g_wuy.swp391.voltera.model.request.ContractRequest;
 import com.g_wuy.swp391.voltera.model.response.ContractResponse;
+import com.g_wuy.swp391.voltera.model.response.ProductInformationTransactionResponse;
 import com.g_wuy.swp391.voltera.model.response.TransactionResponse;
+import com.g_wuy.swp391.voltera.model.response.TransactionStatusResponse;
 import com.g_wuy.swp391.voltera.repository.AccountRepository;
 import com.g_wuy.swp391.voltera.repository.ContractRepository;
 import com.g_wuy.swp391.voltera.repository.PostRepository;
@@ -19,6 +21,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -253,5 +256,37 @@ public class ContractService {
         }
 
         return transaction.getTransactionid().toString();
+    }
+
+    public ResponseEntity<TransactionStatusResponse> getTransactionStatus(Integer transactionId) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new RuntimeException("Transaction not found: " + transactionId));
+        return ResponseEntity.ok(
+                TransactionStatusResponse.builder()
+                        .transactionId(transaction.getTransactionid())
+                        .transactionStatus(transaction.getTransactionStatus())
+                        .build()
+        );
+    }
+
+    public ResponseEntity<ProductInformationTransactionResponse> getProductInformationByContractId(Integer contractId) {
+        Contract contract = contractRepository.findById(contractId)
+                .orElseThrow(() -> new RuntimeException("Contract not found"));
+        Post post = contract.getPostid();
+
+        ProductInformationTransactionResponse response = ProductInformationTransactionResponse.builder()
+                .type("VEHICLE")
+                .title(post.getTitle())
+                .brand(post.getVehicle().getBrand())
+                .model(post.getVehicle().getModel())
+                .version(post.getVehicle().getVersion())
+                .odo(post.getVehicle().getOdo())
+                .batteryCapacity(post.getVehicle().getBatteryCapacity())
+                .yearManufacture(post.getVehicle().getYearManufacture())
+                .color(post.getVehicle().getColor())
+                .price(post.getPrice())
+                .build();
+
+        return ResponseEntity.ok(response);
     }
 }

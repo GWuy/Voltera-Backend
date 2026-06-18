@@ -9,9 +9,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PayOSResponse {
-    private String checkoutUrl;
-    private String paymentLinkId;
-    private Long orderCode;
+public class TransactionStatusResponse {
     private Integer transactionId;
+    private String transactionStatus;
 }

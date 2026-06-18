@@ -61,7 +61,7 @@ public class AccountService {
 
         Account account = accountMapper.toAccount(registerRequest);
         account.setUser(userSaved);
-        account.setStatus("PENDING");
+        account.setStatus("APPROVE");
         account.setRole(registerRequest.getRole());
         account.setPassword(securityConfiguration.passwordEncoder().encode(registerRequest.getPassword()));
 

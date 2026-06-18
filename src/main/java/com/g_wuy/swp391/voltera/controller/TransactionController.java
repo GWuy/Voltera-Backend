@@ -1,5 +1,6 @@
 package com.g_wuy.swp391.voltera.controller;
 
+import com.g_wuy.swp391.voltera.model.response.ProductInformationTransactionResponse;
 import com.g_wuy.swp391.voltera.model.response.TransactionResponse;
 import com.g_wuy.swp391.voltera.service.TransactionService;
 
@@ -19,7 +20,7 @@ public class TransactionController {
 
     TransactionService transactionService;
 
-    @GetMapping("/{transactionStatus}")
+    @GetMapping("/by-status/{transactionStatus}")
     public ResponseEntity<List<TransactionResponse>> findTransactionsByUser(
             @RequestHeader("Authorization") String token,
             @PathVariable String transactionStatus) {
@@ -31,5 +32,17 @@ public class TransactionController {
             @RequestHeader("Authorization") String token,
             @PathVariable Integer transactionId) {
         return transactionService.getTransactionDetail(transactionId, token);
+    }
+
+    @GetMapping("/status/{transactionId}")
+    public ResponseEntity<com.g_wuy.swp391.voltera.model.response.TransactionStatusResponse> getTransactionStatus(
+            @PathVariable Integer transactionId) {
+        return transactionService.getTransactionStatus(transactionId);
+    }
+
+    @GetMapping("/product-info/{transactionId}")
+    public ResponseEntity<ProductInformationTransactionResponse> getProductInfo(
+            @PathVariable Integer transactionId) {
+        return transactionService.getProductInformationByTransactionId(transactionId);
     }
 }

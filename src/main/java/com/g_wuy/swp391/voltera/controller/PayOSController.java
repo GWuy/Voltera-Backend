@@ -1,10 +1,9 @@
 package com.g_wuy.swp391.voltera.controller;
 
 import com.g_wuy.swp391.voltera.model.request.PayOSRequest;
-import com.g_wuy.swp391.voltera.model.response.PayOSResponse;
+import com.g_wuy.swp391.voltera.model.response.PayOSCreateResponse;
 import com.g_wuy.swp391.voltera.service.PayOSService;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -22,77 +21,24 @@ import java.util.Map;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class PayOSController {
-
     PayOSService payOSService;
     PayOS payOS;
 
     @PostMapping("/create-payment/{transactionId}")
-    public ResponseEntity<PayOSResponse> createPayment(
-            @RequestBody PayOSRequest request,
-            HttpServletRequest httpRequest,
-            @PathVariable Integer transactionId) {
-        try {
-            PayOSResponse response = payOSService.createPayment(request, httpRequest, transactionId);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("Error creating PayOS payment: ", e);
-            PayOSResponse errorResponse = new PayOSResponse();
-            errorResponse.setCode("99");
-            errorResponse.setMessage("Error creating payment: " + e.getMessage());
-            return ResponseEntity.badRequest().body(errorResponse);
-        }
+    public ResponseEntity<PayOSCreateResponse> createPayment(@PathVariable Integer transactionId, @RequestBody(required = false) PayOSRequest request, HttpServletRequest httpRequest) {
+        return ResponseEntity.ok(payOSService.createPayment(transactionId, request, httpRequest));
     }
 
     @GetMapping("/return/{transactionId}")
-    public void handleReturn(
-            @RequestParam Map<String, String> params,
-            @PathVariable Integer transactionId,
-            HttpServletRequest request,
-            HttpServletResponse response) throws java.io.IOException {
-
-        payOSService.handleReturn(params, transactionId);
-
-        StringBuilder frontendUrl = new StringBuilder("http://localhost:5173/payment/callback");
-        frontendUrl.append("?");
-
-        for (Map.Entry<String, String> entry : params.entrySet()) {
-            frontendUrl.append(entry.getKey()).append("=").append(entry.getValue()).append("&");
-        }
-        frontendUrl.append("paymentMethod=PAYOS");
-
-        response.sendRedirect(frontendUrl.toString());
-    }
+    public ResponseEntity<Void> returnUrl(@PathVariable Integer transactionId) { return ResponseEntity.status(302).header("Location", "voltera://payment/callback?transactionId=" + transactionId).build(); }
 
     @GetMapping("/cancel/{transactionId}")
-    public void handleCancel(
-            @RequestParam Map<String, String> params,
-            @PathVariable("transactionId") Integer transactionId,
-            HttpServletRequest request,
-            HttpServletResponse response) throws java.io.IOException {
-
-        params.put("code", "99"); // Fake a failed code for handling
-        payOSService.handleReturn(params, transactionId);
-
-        StringBuilder frontendUrl = new StringBuilder("http://localhost:5173/payment/callback");
-        frontendUrl.append("?");
-
-        for (Map.Entry<String, String> entry : params.entrySet()) {
-            frontendUrl.append(entry.getKey()).append("=").append(entry.getValue()).append("&");
-        }
-        frontendUrl.append("paymentMethod=PAYOS");
-
-        response.sendRedirect(frontendUrl.toString());
-    }
+    public ResponseEntity<Void> cancelUrl(@PathVariable Integer transactionId) { return ResponseEntity.status(302).header("Location", "voltera://payment/callback?transactionId=" + transactionId + "&status=cancelled").build(); }
 
     @PostMapping("/webhook")
-    public ResponseEntity<?> payosWebhookHandler(@RequestBody Object body) {
-        try {
-            WebhookData data = payOS.webhooks().verify(body);
-            payOSService.processWebhook(data);
-            return ResponseEntity.ok("Webhook delivered");
-        } catch (Exception e) {
-            log.error("Webhook error: ", e);
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+    public ResponseEntity<Map<String, Object>> webhook(@RequestBody Object body) {
+        WebhookData data = payOS.webhooks().verify(body);
+        payOSService.processWebhook(data);
+        return ResponseEntity.ok(Map.of("success", true));
     }
 }

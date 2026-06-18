@@ -1,10 +1,13 @@
 package com.g_wuy.swp391.voltera.service;
 
 import com.g_wuy.swp391.voltera.entity.Contract;
+import com.g_wuy.swp391.voltera.entity.Post;
 import com.g_wuy.swp391.voltera.entity.Transaction;
 import com.g_wuy.swp391.voltera.entity.User;
 import com.g_wuy.swp391.voltera.mapper.TransactionMapper;
+import com.g_wuy.swp391.voltera.model.response.ProductInformationTransactionResponse;
 import com.g_wuy.swp391.voltera.model.response.TransactionResponse;
+import com.g_wuy.swp391.voltera.model.response.TransactionStatusResponse;
 import com.g_wuy.swp391.voltera.repository.TransactionRepository;
 import com.g_wuy.swp391.voltera.repository.UserRepository;
 import lombok.AccessLevel;
@@ -91,4 +94,53 @@ public class TransactionService {
         return ResponseEntity.ok(response);
     }
 
+    public ResponseEntity<TransactionStatusResponse> getTransactionStatus(Integer transactionId) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new RuntimeException("Transaction not found: " + transactionId));
+        return ResponseEntity.ok(
+            com.g_wuy.swp391.voltera.model.response.TransactionStatusResponse.builder()
+                .transactionId(transaction.getTransactionid())
+                .transactionStatus(mapStatus(transaction.getTransactionStatus()))
+                .build()
+        );
+    }
+
+    public ResponseEntity<ProductInformationTransactionResponse> getProductInformationByTransactionId(Integer transactionId) {
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new RuntimeException("Transaction not found: " + transactionId));
+
+        Post post = transaction.getPost();
+        ProductInformationTransactionResponse.ProductInformationTransactionResponseBuilder builder = ProductInformationTransactionResponse.builder();
+
+        builder.title(post.getTitle());
+
+        if (post.getVehicle() != null) {
+            builder.type("VEHICLE")
+                    .brand(post.getVehicle().getBrand())
+                    .model(post.getVehicle().getModel())
+                    .version(post.getVehicle().getVersion())
+                    .odo(post.getVehicle().getOdo())
+                    .batteryCapacity(post.getVehicle().getBatteryCapacity())
+                    .yearManufacture(post.getVehicle().getYearManufacture())
+                    .color(post.getVehicle().getColor())
+                    .price(post.getPrice());
+        } else if (post.getBattery() != null) {
+            builder.type("BATTERY")
+                    .brand(post.getBattery().getBatteryTypeId() != null ? post.getBattery().getBatteryTypeId().getTypename() : null)
+                    .model(post.getBattery().getSerialNumber())
+                    .batteryCapacity(post.getBattery().getOriginCapacity())
+                    .odo(post.getBattery().getMileageCovered());
+        }
+
+        return ResponseEntity.ok(builder.build());
+    }
+
+    private String mapStatus(String status) {
+        if (status == null) return null;
+        return switch (status.toUpperCase()) {
+            case "DONE" -> "PAID";
+            case "FAIL" -> "FAILED";
+            default -> status.toUpperCase();
+        };
+    }
 }

@@ -2,6 +2,7 @@ package com.g_wuy.swp391.voltera.controller;
 
 import com.g_wuy.swp391.voltera.model.request.ContractRequest;
 import com.g_wuy.swp391.voltera.model.response.ContractResponse;
+import com.g_wuy.swp391.voltera.model.response.ProductInformationTransactionResponse;
 import com.g_wuy.swp391.voltera.model.response.TransactionResponse;
 import com.g_wuy.swp391.voltera.service.ContractService;
 import com.g_wuy.swp391.voltera.service.JwtService;
@@ -35,27 +36,27 @@ public class ContractController {
         return ResponseEntity.ok(contractService.createContract(request, username));
     }
 
-    @PutMapping("/{id}/sign")
+    @PutMapping("/{contractId}/sign")
     public ResponseEntity<ContractResponse> signContract(
             @RequestHeader("Authorization") String authHeader,
-            @PathVariable Integer id) {
+            @PathVariable Integer contractId) {
 
         String token = authHeader.substring(7);
         String username = jwtService.extractUsername(token);
 
-        ContractResponse response = contractService.signContract(username, id);
+        ContractResponse response = contractService.signContract(username, contractId);
         return ResponseEntity.ok(response);
     }
 
-    @PutMapping("/{id}/cancel")
+    @PutMapping("/{contractId}/cancel")
     public ResponseEntity<ContractResponse> cancelContract(
             @RequestHeader("Authorization") String authHeader,
-            @PathVariable Integer id) {
+            @PathVariable Integer contractId) {
 
         String token = authHeader.substring(7);
         String username = jwtService.extractUsername(token);
 
-        ContractResponse response = contractService.cancelContract(username, id);
+        ContractResponse response = contractService.cancelContract(username, contractId);
         return ResponseEntity.ok(response);
     }
 
@@ -101,5 +102,12 @@ public class ContractController {
 
         String transactionId = contractService.createPaymentForContract(id, username);
         return ResponseEntity.ok(transactionId);
+    }
+
+    @GetMapping("/product-infor/{contractId}")
+    public ResponseEntity<ProductInformationTransactionResponse> getProductInformationByContractId(
+            @PathVariable Integer contractId) {
+
+        return contractService.getProductInformationByContractId(contractId);
     }
 }

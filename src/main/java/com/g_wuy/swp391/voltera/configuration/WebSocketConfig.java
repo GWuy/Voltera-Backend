@@ -1,4 +1,4 @@
-package com.g_wuy.swp391.voltera.config;
+package com.g_wuy.swp391.voltera.configuration;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
