@@ -1,395 +1,149 @@
-# Chat API Documentation
+# Chat Service API Documentation
 
-This document describes the API endpoints and websocket events used for the real-time chat functionality.
+Tài liệu này hướng dẫn cách sử dụng Chat API cho hệ thống Voltera, bao gồm các REST API và kết nối WebSocket (STOMP).
 
-## Data Models
+## 1. Tổng quan WebSocket
 
-### Message
+Hệ thống sử dụng STOMP qua WebSocket để truyền tải tin nhắn thời gian thực.
+
+- **WebSocket Endpoint:** `/ws`
+- **Giao thức:** STOMP (với SockJS hỗ trợ fallback)
+- **Xác thực:** Gửi JWT Token qua header `Authorization` khi kết nối (CONNECT frame).
+  - Header: `Authorization: Bearer <your_jwt_token>`
+
+### 1.1 Destinations (Lộ trình tin nhắn)
+
+- **Subscribe (Nhận tin nhắn):** `/user/queue/messages`
+- **Send (Gửi tin nhắn):** `/app/chat.send`
+
+---
+
+## 2. REST API Reference
+
+Các API cơ bản để quản lý cuộc trò chuyện và lịch sử tin nhắn.
+**Base URL:** `/api/v1/chat`
+
+### 2.1 Lấy danh sách cuộc trò chuyện
+Trả về danh sách các cuộc trò chuyện của người dùng hiện tại kèm theo tin nhắn cuối cùng và số tin nhắn chưa đọc.
+
+- **Endpoint:** `GET /conversations`
+- **Headers:** `Authorization: Bearer <token>`
+- **Phản hồi mẫu (200 OK):**
 ```json
-{
-  "id": "uuid",
-  "senderId": "uuid",
-  "receiverId": "uuid", 
-  "content": "string",
-  "createdAt": "timestamp",
-  "status": "SENT | DELIVERED | READ"
-}
-```
-
-### MessageAttachment
-```json
-{
-  "id": "uuid",
-  "messageId": "uuid",
-  "fileUrl": "string",
-  "fileType": "IMAGE | DOCUMENT | VIDEO",
-  "fileName": "string",
-  "fileSize": "number"
-}
-```
-
-## REST API Endpoints
-
-### 1. Get Chat History
-Retrieves previous messages between the current user and another user.
-
-**Endpoint:** `GET /api/v1/chat/messages/{receiverId}`
-
-**Query Parameters:**
-- `page` (optional): Page number (default: 0)
-- `size` (optional): Number of messages per page (default: 20)
-
-**Response:**
-```json
-{
-  "status": 200,
-  "message": "success",
-  "data": {
-    "content": [
-      {
-        "id": "...",
-        "senderId": "...",
-        "receiverId": "...",
-        "content": "Hello",
-        "createdAt": "2023-10-25T10:00:00Z",
-        "status": "READ"
-      }
-    ],
-    "pageNumber": 0,
-    "pageSize": 20,
-    "totalElements": 50,
-    "totalPages": 3,
-    "last": false
+[
+  {
+    "id": 1,
+    "type": "PRIVATE",
+    "otherUserId": 5,
+    "otherUserName": "Nguyễn Văn A",
+    "otherUserAvatar": "https://example.com/avatar.png",
+    "lastMessage": "Chào bạn, xe đã sạc xong chưa?",
+    "lastMessageTime": "2024-03-20T10:30:00Z",
+    "unreadCount": 2
   }
-}
+]
 ```
 
-### 2. Mark Messages as Read
-Marks all unread messages from a specific user as read.
+### 2.2 Lấy lịch sử tin nhắn
+Lấy danh sách tin nhắn giữa người dùng hiện tại và một người dùng khác. Hỗ trợ phân trang.
 
-**Endpoint:** `PUT /api/v1/chat/messages/{senderId}/read`
-
-**Response:**
+- **Endpoint:** `GET /messages/{receiverId}`
+- **Query Params:**
+  - `page` (mặc định: 0)
+  - `size` (mặc định: 20)
+- **Headers:** `Authorization: Bearer <token>`
+- **Phản hồi mẫu (200 OK):**
 ```json
 {
-  "status": 200,
-  "message": "Messages marked as read",
-  "data": null
-}
-```
-
-### 3. Get User Conversations
-Retrieves all conversations for the current user.
-
-**Endpoint:** `GET /api/v1/chat/conversations`
-
-**Response:**
-```json
-{
-  "status": 200,
-  "message": "success",
-  "data": [
+  "content": [
     {
-      "id": 1,
-      "type": "PRIVATE",
-      "otherUserId": 5,
-      "otherUserName": "John Doe",
-      "otherUserAvatar": "https://...",
-      "lastMessage": "See you soon!",
-      "lastMessageTime": "2023-10-25T10:00:00Z",
-      "unreadCount": 3
+      "id": 105,
+      "conversationId": 1,
+      "senderId": 5,
+      "senderName": "Nguyễn Văn A",
+      "senderAvatar": "...",
+      "content": "Chào bạn!",
+      "messageType": "TEXT",
+      "createdAt": "2024-03-20T10:30:00Z",
+      "attachments": []
     }
-  ]
+  ],
+  "pageable": { ... },
+  "totalElements": 1,
+  "totalPages": 1
 }
 ```
 
-### 4. Upload Attachment
-Uploads a file to be attached to a message.
+### 2.3 Đánh dấu tin nhắn đã đọc
+Đánh dấu tất cả tin nhắn từ một người gửi cụ thể là đã được người dùng hiện tại đọc.
 
-**Endpoint:** `POST /api/v1/chat/attachments`
+- **Endpoint:** `PUT /messages/{senderId}/read`
+- **Headers:** `Authorization: Bearer <token>`
+- **Phản hồi:** `200 OK`
 
-**Headers:**
-- `Content-Type: multipart/form-data`
+---
 
-**Body:**
-- `file`: (File) The file to upload
+## 3. WebSocket Real-time Flow
 
-**Response:**
-```json
-{
-  "status": 200,
-  "message": "Upload successful",
-  "data": {
-    "fileUrl": "https://...",
-    "fileName": "document.pdf",
-    "fileType": "DOCUMENT",
-    "fileSize": 1024500
-  }
-}
-```
+### 3.1 Gửi tin nhắn
+Gửi một tin nhắn mới tới đích `/app/chat.send`.
 
-## WebSocket Connection
-
-The chat uses STOMP over WebSockets for real-time communication.
-
-**Connection Endpoint:** `/ws`
-**Authentication:** Pass the JWT token in the connection headers or query string (depending on your setup).
-
-### Subscriptions (Listen to events)
-
-**1. Personal Messages Queue**
-Subscribe to this queue to receive new messages directed to the current user.
-- **Destination:** `/user/queue/messages`
-- **Payload:** ChatMessageResponse Object
-
-**2. Message Status Updates**
-Subscribe to this queue to know when your sent messages are read by the recipient.
-- **Destination:** `/user/queue/status`
-- **Payload:**
-```json
-{
-  "messageIds": ["id1", "id2"],
-  "status": "READ"
-}
-```
-
-### Publishing (Send events)
-
-**1. Send a Message**
-- **Destination:** `/app/chat.send`
-- **Payload:**
+**Payload:**
 ```json
 {
   "receiverId": 5,
-  "content": "Hello there!",
+  "content": "Chào bạn, tôi muốn hỏi về trạm sạc.",
   "messageType": "TEXT",
   "attachments": [
-     {
-       "fileUrl": "https://...",
-       "fileType": "IMAGE",
-       "fileName": "photo.jpg",
-       "fileSize": 2048000
-     }
+    {
+      "fileUrl": "...",
+      "fileType": "IMAGE"
+    }
   ]
 }
 ```
 
-**2. Send Typing Indicator (Optional)**
-- **Destination:** `/app/chat.typing`
-- **Payload:**
-```json
-{
-  "receiverId": 5,
-  "isTyping": true
-}
-```
+### 3.2 Nhận tin nhắn
+Khi có tin nhắn mới, Server sẽ gửi dữ liệu tới `/user/queue/messages` của cả người gửi và người nhận.
 
-## Implementation Examples
+**Cấu trúc dữ liệu nhận được:**
+Giống như đối tượng `ChatMessageResponse` trong API lịch sử tin nhắn.
 
-### Frontend JavaScript (WebSocket Client)
+---
+
+## 4. Ví dụ Code Client (JavaScript - StompJS)
 
 ```javascript
-// Connect to WebSocket
-const stompClient = new StompJs.Client({
-    brokerURL: 'ws://localhost:8080/ws',
-    reconnectDelay: 5000,
-    connectHeaders: {
-        Authorization: 'Bearer ' + localStorage.getItem('token')
-    }
-});
+const socket = new SockJS('/ws');
+const stompClient = Stomp.over(socket);
 
-stompClient.onConnect = function() {
-    console.log('Connected!');
-    
-    // Subscribe to receive messages
-    stompClient.subscribe('/user/queue/messages', function(message) {
+const headers = {
+    'Authorization': 'Bearer ' + token
+};
+
+stompClient.connect(headers, function (frame) {
+    console.log('Connected: ' + frame);
+
+    // 1. Đăng ký nhận tin nhắn
+    stompClient.subscribe('/user/queue/messages', function (message) {
         const chatMessage = JSON.parse(message.body);
-        console.log('Received message:', chatMessage);
-        displayMessage(chatMessage);
+        console.log('Tin nhắn mới:', chatMessage);
+        // Hiển thị tin nhắn lên UI
     });
-    
-    // Subscribe to status updates
-    stompClient.subscribe('/user/queue/status', function(message) {
-        const status = JSON.parse(message.body);
-        markMessagesAsRead(status);
-    });
-};
 
-stompClient.onError = function(error) {
-    console.error('WebSocket error:', error);
-};
-
-stompClient.activate();
-
-// Send a message
-function sendMessage(receiverId, content) {
-    const message = {
-        receiverId: receiverId,
-        content: content,
-        messageType: 'TEXT',
-        attachments: []
+    // 2. Gửi tin nhắn
+    const sendMessage = (receiverId, text) => {
+        const payload = {
+            receiverId: receiverId,
+            content: text,
+            messageType: 'TEXT'
+        };
+        stompClient.send("/app/chat.send", headers, JSON.stringify(payload));
     };
-    
-    stompClient.publish({
-        destination: '/app/chat.send',
-        body: JSON.stringify(message),
-        headers: {
-            Authorization: 'Bearer ' + localStorage.getItem('token')
-        }
-    });
-}
-
-// Disconnect
-function disconnect() {
-    if (stompClient !== null) {
-        stompClient.deactivate();
-    }
-}
+});
 ```
 
-### REST API Usage (Fetch Example)
-
-```javascript
-// Get conversations
-async function getConversations() {
-    const response = await fetch('/api/v1/chat/conversations', {
-        headers: {
-            Authorization: 'Bearer ' + localStorage.getItem('token')
-        }
-    });
-    return await response.json();
-}
-
-// Get message history
-async function getMessageHistory(receiverId, page = 0, size = 20) {
-    const response = await fetch(
-        `/api/v1/chat/messages/${receiverId}?page=${page}&size=${size}`,
-        {
-            headers: {
-                Authorization: 'Bearer ' + localStorage.getItem('token')
-            }
-        }
-    );
-    return await response.json();
-}
-
-// Mark as read
-async function markAsRead(senderId) {
-    const response = await fetch(`/api/v1/chat/messages/${senderId}/read`, {
-        method: 'PUT',
-        headers: {
-            Authorization: 'Bearer ' + localStorage.getItem('token')
-        }
-    });
-    return await response.json();
-}
-```
-
-### Backend Usage (Java)
-
-```java
-// Inject ChatService
-@Autowired
-private ChatService chatService;
-
-// Get user conversations
-String token = "Bearer eyJ...";
-List<ConversationResponse> conversations = chatService.getUserConversations(token);
-
-// Get message history
-String token = "Bearer eyJ...";
-Page<ChatMessageResponse> history = chatService.getMessageHistory(
-    token, 
-    receiverId, 
-    0,  // page
-    20  // size
-);
-
-// Mark as read
-chatService.markMessagesAsRead(token, senderId);
-
-// Send message via service
-ChatMessageRequest request = new ChatMessageRequest();
-request.setReceiverId(5);
-request.setContent("Hello!");
-request.setMessageType("TEXT");
-
-ChatMessageResponse response = chatService.sendMessage(token, request);
-```
-
-## File Structure
-
-```
-src/main/java/com/g_wuy/swp391/voltera/
-├── config/
-│   └── WebSocketConfig.java          # WebSocket STOMP configuration
-├── controller/
-│   └── ChatController.java           # REST endpoints + WebSocket handlers
-├── service/
-│   └── ChatService.java              # Business logic for chat operations
-├── repository/
-│   ├── MessageRepository.java        # Message data access
-│   ├── MessageAttachmentRepository.java
-│   ├── ConversationRepository.java
-│   └── ConversationParticipantRepository.java
-├── entity/
-│   ├── Message.java                  # Message database entity
-│   ├── MessageAttachment.java
-│   ├── Conversation.java
-│   └── ConversationParticipant.java
-├── model/
-│   ├── request/
-│   │   └── ChatMessageRequest.java
-│   └── response/
-│       ├── ChatMessageResponse.java
-│       └── ConversationResponse.java
-```
-
-## Error Handling
-
-All errors return with appropriate HTTP status codes:
-- `400 Bad Request` - Invalid request parameters
-- `401 Unauthorized` - Missing or invalid JWT token
-- `404 Not Found` - User or resource not found
-- `500 Internal Server Error` - Server-side errors
-
-Example error response:
-```json
-{
-  "status": 404,
-  "message": "Receiver not found",
-  "data": null
-}
-```
-
-## Security Notes
-
-- JWT token is required for all endpoints and WebSocket connections
-- Token is extracted from `Authorization: Bearer <token>` header
-- WebSocket connections use STOMP protocol with header-based authentication
-- CORS is enabled for `*` origins (configure as needed for production)
-- All user IDs are validated against JWT claims to prevent unauthorized access
-- Messages are associated with authenticated users only
-
-## Dependencies Added to pom.xml
-
-```xml
-<dependency>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-starter-websocket</artifactId>
-</dependency>
-```
-
-## Testing the Chat API
-
-### 1. Using Postman (REST endpoints)
-- Set Authorization header: `Bearer <your_jwt_token>`
-- GET `/api/v1/chat/conversations` - List all conversations
-- GET `/api/v1/chat/messages/{receiverId}?page=0&size=20` - Get message history
-- PUT `/api/v1/chat/messages/{senderId}/read` - Mark messages as read
-
-### 2. Using WebSocket (STOMP)
-- Connect to `ws://localhost:8080/ws` with STOMP client
-- Subscribe to `/user/queue/messages`
-- Send message to `/app/chat.send` with JSON payload
-- Listen for incoming messages on subscribed queues
+## 5. Lưu ý
+- Đảm bảo Token JWT còn hạn khi kết nối WebSocket.
+- Hệ thống tự động tạo cuộc trò chuyện (Conversation) nếu chưa tồn tại giữa 2 người dùng khi gửi tin nhắn lần đầu.
+- `unreadCount` được tính dựa trên `lastReadMessageId` lưu trong bảng `conversation_participant`.

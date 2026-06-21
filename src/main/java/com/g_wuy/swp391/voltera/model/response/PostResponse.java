@@ -24,4 +24,6 @@ public class PostResponse {
     private String location;
     private String thumbnail;
     private String feeStatus;
+    private BigDecimal sellerId;
+    private String sellerName;
 }

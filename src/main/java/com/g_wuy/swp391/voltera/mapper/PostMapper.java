@@ -31,6 +31,8 @@ public interface PostMapper {
     @Mapping(source = "battery", target = "battery")
     @Mapping(target = "location", ignore = true)
     @Mapping(target = "thumbnail", ignore = true)
+    @Mapping(source = "post.sellerId.id", target = "sellerId")
+    @Mapping(source = "post.sellerId.fullname", target = "sellerName")
     PostResponse toPostResponse(Post post, Battery battery, Vehicle vehicle, List<String> imageUrls);
 
 
