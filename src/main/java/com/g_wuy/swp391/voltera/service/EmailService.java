@@ -30,7 +30,7 @@ public class EmailService {
                         "Best regards,\n" +
                         "Voltera Team"
         );
-        message.setFrom("voltera.global@gmail.com");
+        message.setFrom("buigiahuy1506@gmail.com");
         mailSender.send(message);
         System.out.println("Sent OTP to " + to + ": " + otp);
     }
